@@ -5,10 +5,6 @@
 
 using namespace std;
 
-// ======================== Problem 1: Simple Programs ========================
-// Reads input and extracts parameters for wain function
-// Generates MIPS assembly code that returns the first parameter
-
 // Symbol table for storing variable names and their stack offsets
 map<string, int> symbolTable;
 int memoryOffset = 0; // Stack offset for variables
@@ -19,26 +15,25 @@ string generateLabel(const string &prefix) {
     return prefix + to_string(labelCounter++);
 }
 
-// ======================== Problem 2: Declarations and Assignments ========================
 // Function to declare variables and assign values
 void declareVariable(const string &var, int value) {
     memoryOffset -= 4; // Reserve space on stack
     symbolTable[var] = memoryOffset;
-    cout << "\tli $3, " << value << endl; // Load immediate value
-    cout << "\tsw $3, " << memoryOffset << "($29)" << endl; // Store in stack
+    cout << "\tli $t0, " << value << endl;   // Load immediate value
+    cout << "\tsw $t0, " << memoryOffset << "($sp)" << endl; // Store in stack
 }
 
+// Function to assign one variable's value to another
 void assignVariable(const string &var1, const string &var2) {
     if (symbolTable.find(var1) == symbolTable.end() || symbolTable.find(var2) == symbolTable.end()) {
         cerr << "Error: Undefined variable." << endl;
         return;
     }
-    cout << "\tlw $3, " << symbolTable[var2] << "($29)" << endl;
-    cout << "\tsw $3, " << symbolTable[var1] << "($29)" << endl;
+    cout << "\tlw $t0, " << symbolTable[var2] << "($sp)" << endl;
+    cout << "\tsw $t0, " << symbolTable[var1] << "($sp)" << endl;
 }
 
-// ======================== Problem 3: Binary Operations ========================
-// Function to generate MIPS assembly for binary operations
+// Generate MIPS assembly for binary operations
 void generateMIPS(string op, string dest, string src1, string src2) {
     if (op == "PLUS") {
         cout << "\tadd " << dest << ", " << src1 << ", " << src2 << endl;
@@ -55,59 +50,65 @@ void generateMIPS(string op, string dest, string src1, string src2) {
     }
 }
 
-// ======================== Problem 4: Control Flow ========================
-// Function to handle if-else control flow
+// Translate if-else control flow
 void translateIfElse(string condition, vector<string> trueBlock, vector<string> falseBlock) {
     string elseLabel = generateLabel("ELSE");
     string endLabel = generateLabel("ENDIF");
-    cout << condition << " " << elseLabel << endl;
+    cout << "\t" << condition << elseLabel << endl;
     for (const auto &line : trueBlock) {
-        cout << line << endl;
+        cout << "\t" << line << endl;
     }
-    cout << "b " << endLabel << endl;
+    cout << "\tb " << endLabel << endl;
     cout << elseLabel << ":" << endl;
     for (const auto &line : falseBlock) {
-        cout << line << endl;
+        cout << "\t" << line << endl;
     }
     cout << endLabel << ":" << endl;
 }
 
-// Function to handle while loops
+// Translate while loop control flow
 void translateWhileLoop(string condition, vector<string> body) {
     string startLabel = generateLabel("WHILE_START");
     string endLabel = generateLabel("WHILE_END");
     cout << startLabel << ":" << endl;
-    cout << condition << " " << endLabel << endl;
+    cout << "\t" << condition << endLabel << endl;
     for (const auto &line : body) {
-        cout << line << endl;
+        cout << "\t" << line << endl;
     }
-    cout << "b " << startLabel << endl;
+    cout << "\tb " << startLabel << endl;
     cout << endLabel << ":" << endl;
 }
 
-// ======================== Problem 5: I/O Operations ========================
-// Function to handle I/O operations
+// Emit print syscall
 void emitPrintln(string reg) {
-    cout << "\tmove $1, " << reg << endl;
-    cout << "\tjal print" << endl;
+    cout << "\tmove $a0, " << reg << endl;
+    cout << "\tli $v0, 1" << endl;
+    cout << "\tsyscall" << endl;
 }
+
+// Emit putchar syscall
 void emitPutchar(string reg) {
     cout << "\tmove $a0, " << reg << endl;
     cout << "\tli $v0, 11" << endl;
     cout << "\tsyscall" << endl;
 }
+
+// Emit getchar syscall
 void emitGetchar() {
     cout << "\tli $v0, 8" << endl;
     cout << "\tsyscall" << endl;
-    cout << "\tmove $2, $v0" << endl;
+    cout << "\tmove $v1, $v0" << endl;
 }
 
-// ======================== Problem 1-5: Main Code Generator ========================
+// ======================== Main Code Generator ========================
 int main() {
     cout << ".import print" << endl;
     cout << ".text" << endl;
     cout << ".globl wain" << endl;
     cout << "wain:" << endl;
+
+    // Stack pointer setup
+    cout << "\taddi $sp, $sp, -32" << endl; // Allocate stack space
 
     // Problem 2: Declarations and Assignments
     declareVariable("c", 241);
@@ -116,18 +117,20 @@ int main() {
     assignVariable("b", "c");
     assignVariable("a", "b");
 
-    // Problem 4: if-else and while loop
-    translateIfElse("blt $1, $2,", {"WHILE_LOOP:"}, {"li $1, 241"});
-    translateWhileLoop("blt $1, $2,", {"addi $1, $1, 1"});
+    // Problem 4: If-else and while loop
+    translateIfElse("blt $t1, $t2, ", {"li $t0, 1"}, {"li $t0, 241"});
+    translateWhileLoop("blt $t1, $t2, ", {"addi $t1, $t1, 1"});
 
     // Problem 3: Arithmetic operation (a + b)
-    generateMIPS("PLUS", "$3", "$1", "$2");
+    generateMIPS("PLUS", "$t3", "$t1", "$t2");
 
     // Problem 5: I/O operations
-    emitPrintln("$3");
+    emitPrintln("$t3");
     emitGetchar();
-    emitPutchar("$2");
+    emitPutchar("$t2");
 
-    cout << "\tjr $31" << endl;
+    // Restore stack pointer and return
+    cout << "\taddi $sp, $sp, 32" << endl;
+    cout << "\tjr $ra" << endl;
     return 0;
 }
